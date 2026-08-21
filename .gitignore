@@ -1,0 +1,18 @@
+# Local notes and generated outputs
+\#/
+debug/
+
+# Local environment files
+.env
+*.env
+
+# Temporary directories
+.tmp*/
+tmp/
+
+# Build artifacts
+*.exe
+*.dll
+*.so
+*.dylib
+*.test
