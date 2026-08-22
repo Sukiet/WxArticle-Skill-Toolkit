@@ -2,6 +2,8 @@
 
 这份文档是写给会调用 `skill-tool` 的 AI agent 看的。
 
+当前版本：`a0.1`
+
 
 ## 工具用途
 
@@ -9,6 +11,7 @@
 
 它可以用于：
 
+- 输出当前工具版本
 - 新建文章工程
 - 获取某篇文章的本地工程路径
 - 查看可用模板
@@ -72,7 +75,23 @@
 
 ## 命令速查
 
-### 1. 新建文章工程
+### 1. 查看工具版本
+
+```powershell
+skill-tool --version
+```
+
+适用场景：
+
+- 需要确认当前二进制版本
+- 需要判断当前环境是否已经更新到预期版本
+
+注意：
+
+- 当前版本由仓库中的 `VERSION` 文件统一定义
+
+
+### 2. 新建文章工程
 
 ```powershell
 skill-tool init
@@ -88,7 +107,7 @@ skill-tool init
 - 不会初始化模板相关文件
 
 
-### 2. 获取文章工程路径
+### 3. 获取文章工程路径
 
 ```powershell
 skill-tool work-dir -a {article_uuid}
@@ -109,7 +128,7 @@ skill-tool work-dir -a {article_uuid}
 - `example.html` 路径
 
 
-### 3. 查看模板列表
+### 4. 查看模板列表
 
 ```powershell
 skill-tool templates-list
@@ -125,7 +144,7 @@ skill-tool templates-list
 - 先拿模板列表，再和用户确认是否需要、需要哪一个
 
 
-### 4. 拉取模板
+### 5. 拉取模板
 
 ```powershell
 skill-tool fetch-template -a {article_uuid} -t {template_uuid}
@@ -149,7 +168,7 @@ skill-tool fetch-template -a {article_uuid} -t {template_uuid}
 - 不会修改 `article.html`
 
 
-### 5. 压缩单张图片
+### 6. 压缩单张图片
 
 ```powershell
 skill-tool compress -a {article_uuid} -n {image_name}
@@ -186,7 +205,7 @@ skill-tool compress -a {article_uuid} -n {image_name}
 - 目标体积尽量控制在 `9.5MB` 左右，给上传留余量
 
 
-### 6. 上传文章
+### 7. 上传文章
 
 ```powershell
 skill-tool upload -a {article_uuid}
@@ -215,7 +234,7 @@ skill-tool upload -a {article_uuid}
 - `example.html`
 
 
-### 7. 生成预览二维码
+### 8. 生成预览二维码
 
 ```powershell
 skill-tool preview -a {article_uuid}
@@ -260,16 +279,17 @@ skill-tool preview -a {article_uuid}
 
 ## 一条典型流程
 
-1. 执行 `skill-tool init`
-2. 如有需要，可先执行 `skill-tool work-dir -a {article_uuid}` 获取本地工程路径
-3. 询问用户是否需要模板
-4. 如果需要模板，执行 `skill-tool templates-list`
-5. 用户确认模板后，执行：
+1. 如有需要，可先执行 `skill-tool --version` 确认当前工具版本
+2. 执行 `skill-tool init`
+3. 如有需要，可先执行 `skill-tool work-dir -a {article_uuid}` 获取本地工程路径
+4. 询问用户是否需要模板
+5. 如果需要模板，执行 `skill-tool templates-list`
+6. 用户确认模板后，执行：
    `skill-tool fetch-template -a {article_uuid} -t {template_uuid}`
-6. 在本地准备正式文章内容与元数据
-7. 如果某张图片过大，执行：
+7. 在本地准备正式文章内容与元数据
+8. 如果某张图片过大，执行：
    `skill-tool compress -a {article_uuid} -n {image_name}`
-8. 用户确认可以上传后，执行：
+9. 用户确认可以上传后，执行：
    `skill-tool upload -a {article_uuid}`
-9. 用户确认要预览后，执行：
+10. 用户确认要预览后，执行：
    `skill-tool preview -a {article_uuid}`

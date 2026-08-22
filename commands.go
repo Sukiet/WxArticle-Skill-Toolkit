@@ -15,6 +15,10 @@ import (
 )
 
 func (a *App) Run(_ context.Context, args []string) int {
+	if len(args) == 1 && (args[0] == "--version" || args[0] == "version") {
+		_, _ = fmt.Fprintln(a.stdout, toolVersion())
+		return 0
+	}
 	if err := a.loadDotEnv(); err != nil {
 		a.writeError(err)
 		return 1
@@ -32,8 +36,14 @@ func (a *App) run(args []string) error {
 	}
 
 	switch args[0] {
+	case "--version":
+		_, _ = fmt.Fprintln(a.stdout, toolVersion())
+		return nil
 	case "init":
 		return a.commandInit()
+	case "version":
+		_, _ = fmt.Fprintln(a.stdout, toolVersion())
+		return nil
 	case "work-dir":
 		return a.commandWorkDir(args[1:])
 	case "templates-list":
