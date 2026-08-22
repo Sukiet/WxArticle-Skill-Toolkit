@@ -34,10 +34,14 @@ func (a *App) run(args []string) error {
 	switch args[0] {
 	case "init":
 		return a.commandInit()
+	case "work-dir":
+		return a.commandWorkDir(args[1:])
 	case "templates-list":
 		return a.commandTemplatesList()
 	case "fetch-template":
 		return a.commandFetchTemplate(args[1:])
+	case "compress":
+		return a.commandCompress(args[1:])
 	case "upload":
 		return a.commandUpload(args[1:])
 	case "preview":
@@ -98,6 +102,40 @@ func (a *App) commandInit() error {
 			paths.ProjectDir,
 			articleUUID,
 		),
+	})
+}
+
+func (a *App) commandWorkDir(args []string) error {
+	set := newFlagSet("work-dir")
+	articleUUID := set.String("a", "", "")
+	set.StringVar(articleUUID, "article", "", "")
+	if err := set.Parse(args); err != nil {
+		return err
+	}
+	if strings.TrimSpace(*articleUUID) == "" {
+		return errors.New("missing article uuid: use -a or --article")
+	}
+
+	repoDir, err := a.repoDir()
+	if err != nil {
+		return err
+	}
+
+	paths := makeArticlePaths(repoDir, *articleUUID)
+	if err := mustProjectExist(paths); err != nil {
+		return fmt.Errorf("article project not found: %w", err)
+	}
+
+	return a.writeSuccess(map[string]any{
+		"article_uuid":          *articleUUID,
+		"project_dir":           paths.ProjectDir,
+		"metadata_path":         paths.MetadataPath,
+		"article_html_path":     paths.ArticleHTMLPath,
+		"images_dir":            paths.ImagesDir,
+		"example_metadata_path": paths.ExampleMetadataPath,
+		"example_html_path":     paths.ExampleHTMLPath,
+		"message":               "文章工程路径已定位完成。",
+		"next_commands":         []string{"fetch-template", "compress", "upload", "preview"},
 	})
 }
 
@@ -257,6 +295,14 @@ func (a *App) commandUpload(args []string) error {
 		}
 
 		imagePath := filepath.Join(paths.ImagesDir, entry.Name())
+		sizeBytes, err := fileSize(imagePath)
+		if err != nil {
+			return fmt.Errorf("stat image %s: %w", entry.Name(), err)
+		}
+		if sizeBytes > maxUploadImageSize {
+			return fmt.Errorf("image %s is larger than 10MB; use compress -a %s -n %s before upload", entry.Name(), *articleUUID, entry.Name())
+		}
+
 		md5Value, err := fileMD5(imagePath)
 		if err != nil {
 			return fmt.Errorf("md5 image %s: %w", entry.Name(), err)
@@ -271,9 +317,9 @@ func (a *App) commandUpload(args []string) error {
 
 		if existsResponse.Exists {
 			skippedImages++
-		} else {
-			uploadedImages++
+			continue
 		}
+		uploadedImages++
 
 		if err := a.postMultipart(host+"/upload/image", map[string]string{
 			"md5":          md5Value,
@@ -313,6 +359,65 @@ func (a *App) commandUpload(args []string) error {
 		"modified_at_readable": formatTimestamp(metadataResponse.ModifiedAt),
 		"message":              "正式文章内容、元数据和图片已上传完成。",
 		"next_commands":        []string{"preview"},
+	})
+}
+
+func (a *App) commandCompress(args []string) error {
+	set := newFlagSet("compress")
+	articleUUID := set.String("a", "", "")
+	set.StringVar(articleUUID, "article", "", "")
+	imageName := set.String("n", "", "")
+	set.StringVar(imageName, "name", "", "")
+	if err := set.Parse(args); err != nil {
+		return err
+	}
+	if strings.TrimSpace(*articleUUID) == "" {
+		return errors.New("missing article uuid: use -a or --article")
+	}
+	if strings.TrimSpace(*imageName) == "" {
+		return errors.New("missing image name: use -n or --name")
+	}
+
+	repoDir, err := a.repoDir()
+	if err != nil {
+		return err
+	}
+
+	paths := makeArticlePaths(repoDir, *articleUUID)
+	if err := mustProjectExist(paths); err != nil {
+		return fmt.Errorf("article project not found: %w", err)
+	}
+
+	cleanName := filepath.Base(*imageName)
+	if cleanName != *imageName {
+		return errors.New("image name must be a direct file name under images")
+	}
+
+	imagePath := filepath.Join(paths.ImagesDir, cleanName)
+	if _, err := os.Stat(imagePath); err != nil {
+		return fmt.Errorf("image not found: %w", err)
+	}
+
+	beforeSize, afterSize, err := compressImageToLimit(imagePath, maxUploadImageSize)
+	if err != nil {
+		return fmt.Errorf("compress image %s: %w", cleanName, err)
+	}
+
+	nextCommands := []string{"upload"}
+	message := "这张图片当前没有超过 10MB，因此这次没有执行压缩。"
+	if afterSize < beforeSize {
+		message = "图片已压缩完成，并已覆盖原文件；本次压缩优先保留画质，只有在必要时才缩小尺寸。"
+	}
+
+	return a.writeSuccess(map[string]any{
+		"article_uuid":  *articleUUID,
+		"image_name":    cleanName,
+		"image_path":    imagePath,
+		"size_before":   beforeSize,
+		"size_after":    afterSize,
+		"limit_bytes":   maxUploadImageSize,
+		"message":       message,
+		"next_commands": nextCommands,
 	})
 }
 
