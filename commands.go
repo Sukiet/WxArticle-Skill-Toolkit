@@ -15,14 +15,6 @@ import (
 )
 
 func (a *App) Run(_ context.Context, args []string) int {
-	if len(args) == 1 && (args[0] == "--version" || args[0] == "version") {
-		_, _ = fmt.Fprintln(a.stdout, toolVersion())
-		return 0
-	}
-	if err := a.loadDotEnv(); err != nil {
-		a.writeError(err)
-		return 1
-	}
 	if err := a.run(args); err != nil {
 		a.writeError(err)
 		return 1
@@ -31,34 +23,45 @@ func (a *App) Run(_ context.Context, args []string) int {
 }
 
 func (a *App) run(args []string) error {
-	if len(args) == 0 {
-		return errors.New("missing command")
+	specs := a.commandSpecs()
+
+	if len(args) == 0 || wantsHelp(args) && len(args) == 1 {
+		a.printRootHelp(specs)
+		return nil
 	}
 
-	switch args[0] {
-	case "--version":
-		_, _ = fmt.Fprintln(a.stdout, toolVersion())
+	if len(args) == 1 && args[0] == "--version" {
+		return a.commandVersion(nil)
+	}
+
+	if args[0] == "help" {
+		if len(args) == 1 {
+			a.printRootHelp(specs)
+			return nil
+		}
+
+		spec, ok := specs[args[1]]
+		if !ok {
+			return fmt.Errorf("unknown command: %s", args[1])
+		}
+		a.printCommandHelp(spec)
 		return nil
-	case "init":
-		return a.commandInit()
-	case "version":
-		_, _ = fmt.Fprintln(a.stdout, toolVersion())
-		return nil
-	case "work-dir":
-		return a.commandWorkDir(args[1:])
-	case "templates-list":
-		return a.commandTemplatesList()
-	case "fetch-template":
-		return a.commandFetchTemplate(args[1:])
-	case "compress":
-		return a.commandCompress(args[1:])
-	case "upload":
-		return a.commandUpload(args[1:])
-	case "preview":
-		return a.commandPreview(args[1:])
-	default:
+	}
+
+	spec, ok := specs[args[0]]
+	if !ok {
 		return fmt.Errorf("unknown command: %s", args[0])
 	}
+	if wantsHelp(args[1:]) {
+		a.printCommandHelp(spec)
+		return nil
+	}
+	if spec.NeedsEnv {
+		if err := a.loadDotEnv(); err != nil {
+			return err
+		}
+	}
+	return spec.Run(args[1:])
 }
 
 func newFlagSet(name string) *flag.FlagSet {
@@ -67,7 +70,26 @@ func newFlagSet(name string) *flag.FlagSet {
 	return set
 }
 
-func (a *App) commandInit() error {
+func ensureNoExtraArgs(set *flag.FlagSet) error {
+	if extras := set.Args(); len(extras) > 0 {
+		return fmt.Errorf("unexpected arguments: %s", strings.Join(extras, " "))
+	}
+	return nil
+}
+
+func (a *App) commandVersion(args []string) error {
+	if len(args) > 0 {
+		return fmt.Errorf("unexpected arguments: %s", strings.Join(args, " "))
+	}
+	_, _ = fmt.Fprintln(a.stdout, toolVersion())
+	return nil
+}
+
+func (a *App) commandInit(args []string) error {
+	if len(args) > 0 {
+		return fmt.Errorf("unexpected arguments: %s", strings.Join(args, " "))
+	}
+
 	repoDir, err := a.repoDir()
 	if err != nil {
 		return err
@@ -122,6 +144,9 @@ func (a *App) commandWorkDir(args []string) error {
 	if err := set.Parse(args); err != nil {
 		return err
 	}
+	if err := ensureNoExtraArgs(set); err != nil {
+		return err
+	}
 	if strings.TrimSpace(*articleUUID) == "" {
 		return errors.New("missing article uuid: use -a or --article")
 	}
@@ -149,7 +174,11 @@ func (a *App) commandWorkDir(args []string) error {
 	})
 }
 
-func (a *App) commandTemplatesList() error {
+func (a *App) commandTemplatesList(args []string) error {
+	if len(args) > 0 {
+		return fmt.Errorf("unexpected arguments: %s", strings.Join(args, " "))
+	}
+
 	host, err := a.host()
 	if err != nil {
 		return err
@@ -186,6 +215,9 @@ func (a *App) commandFetchTemplate(args []string) error {
 	templateUUID := set.String("t", "", "")
 	set.StringVar(templateUUID, "template", "", "")
 	if err := set.Parse(args); err != nil {
+		return err
+	}
+	if err := ensureNoExtraArgs(set); err != nil {
 		return err
 	}
 	if strings.TrimSpace(*articleUUID) == "" {
@@ -248,6 +280,9 @@ func (a *App) commandUpload(args []string) error {
 	articleUUID := set.String("a", "", "")
 	set.StringVar(articleUUID, "article", "", "")
 	if err := set.Parse(args); err != nil {
+		return err
+	}
+	if err := ensureNoExtraArgs(set); err != nil {
 		return err
 	}
 	if strings.TrimSpace(*articleUUID) == "" {
@@ -381,6 +416,9 @@ func (a *App) commandCompress(args []string) error {
 	if err := set.Parse(args); err != nil {
 		return err
 	}
+	if err := ensureNoExtraArgs(set); err != nil {
+		return err
+	}
 	if strings.TrimSpace(*articleUUID) == "" {
 		return errors.New("missing article uuid: use -a or --article")
 	}
@@ -436,6 +474,9 @@ func (a *App) commandPreview(args []string) error {
 	articleUUID := set.String("a", "", "")
 	set.StringVar(articleUUID, "article", "", "")
 	if err := set.Parse(args); err != nil {
+		return err
+	}
+	if err := ensureNoExtraArgs(set); err != nil {
 		return err
 	}
 	if strings.TrimSpace(*articleUUID) == "" {

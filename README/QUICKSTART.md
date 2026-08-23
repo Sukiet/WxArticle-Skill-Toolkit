@@ -12,6 +12,7 @@
 它可以用于：
 
 - 输出当前工具版本
+- 输出工具总帮助或单命令帮助
 - 新建文章工程
 - 获取某篇文章的本地工程路径
 - 查看可用模板
@@ -91,7 +92,27 @@ skill-tool --version
 - 当前版本由仓库中的 `VERSION` 文件统一定义
 
 
-### 2. 新建文章工程
+### 2. 查看帮助
+
+```powershell
+skill-tool --help
+skill-tool help fetch-template
+skill-tool fetch-template --help
+```
+
+适用场景：
+
+- 需要查看全部命令列表
+- 需要确认某个命令的参数、用法和示例
+
+注意：
+
+- `--help` 和 `help <command>` 不依赖环境变量
+- 顶层帮助会列出全部命令
+- 子命令帮助会显示单命令用法和示例
+
+
+### 3. 新建文章工程
 
 ```powershell
 skill-tool init
@@ -107,7 +128,7 @@ skill-tool init
 - 不会初始化模板相关文件
 
 
-### 3. 获取文章工程路径
+### 4. 获取文章工程路径
 
 ```powershell
 skill-tool work-dir -a {article_uuid}
@@ -128,7 +149,7 @@ skill-tool work-dir -a {article_uuid}
 - `example.html` 路径
 
 
-### 4. 查看模板列表
+### 5. 查看模板列表
 
 ```powershell
 skill-tool templates-list
@@ -144,7 +165,7 @@ skill-tool templates-list
 - 先拿模板列表，再和用户确认是否需要、需要哪一个
 
 
-### 5. 拉取模板
+### 6. 拉取模板
 
 ```powershell
 skill-tool fetch-template -a {article_uuid} -t {template_uuid}
@@ -168,7 +189,7 @@ skill-tool fetch-template -a {article_uuid} -t {template_uuid}
 - 不会修改 `article.html`
 
 
-### 6. 压缩单张图片
+### 7. 压缩单张图片
 
 ```powershell
 skill-tool compress -a {article_uuid} -n {image_name}
@@ -205,7 +226,7 @@ skill-tool compress -a {article_uuid} -n {image_name}
 - 目标体积尽量控制在 `9.5MB` 左右，给上传留余量
 
 
-### 7. 上传文章
+### 8. 上传文章
 
 ```powershell
 skill-tool upload -a {article_uuid}
@@ -234,7 +255,7 @@ skill-tool upload -a {article_uuid}
 - `example.html`
 
 
-### 8. 生成预览二维码
+### 9. 生成预览二维码
 
 ```powershell
 skill-tool preview -a {article_uuid}
@@ -280,16 +301,17 @@ skill-tool preview -a {article_uuid}
 ## 一条典型流程
 
 1. 如有需要，可先执行 `skill-tool --version` 确认当前工具版本
-2. 执行 `skill-tool init`
-3. 如有需要，可先执行 `skill-tool work-dir -a {article_uuid}` 获取本地工程路径
-4. 询问用户是否需要模板
-5. 如果需要模板，执行 `skill-tool templates-list`
-6. 用户确认模板后，执行：
+2. 如有需要，可先执行 `skill-tool --help` 或 `skill-tool help <command>` 确认命令用法
+3. 执行 `skill-tool init`
+4. 如有需要，可先执行 `skill-tool work-dir -a {article_uuid}` 获取本地工程路径
+5. 询问用户是否需要模板
+6. 如果需要模板，执行 `skill-tool templates-list`
+7. 用户确认模板后，执行：
    `skill-tool fetch-template -a {article_uuid} -t {template_uuid}`
-7. 在本地准备正式文章内容与元数据
-8. 如果某张图片过大，执行：
+8. 在本地准备正式文章内容与元数据
+9. 如果某张图片过大，执行：
    `skill-tool compress -a {article_uuid} -n {image_name}`
-9. 用户确认可以上传后，执行：
+10. 用户确认可以上传后，执行：
    `skill-tool upload -a {article_uuid}`
-10. 用户确认要预览后，执行：
+11. 用户确认要预览后，执行：
    `skill-tool preview -a {article_uuid}`
