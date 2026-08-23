@@ -2,7 +2,7 @@
 
 这份文档是写给会调用 `skill-tool` 的 AI agent 看的。
 
-当前版本：`a0.1`
+当前版本：`a1.0`
 
 
 ## 工具用途
@@ -217,7 +217,7 @@ skill-tool compress -a {article_uuid} -n {image_name}
 
 - 不要传嵌套路径
 - 这个命令会覆盖原图
-- 当前只支持 `jpg`、`jpeg`、`png`
+- 当前支持 `jpg`、`jpeg`、`png`、`gif`
 
 压缩策略：
 
@@ -229,6 +229,8 @@ skill-tool compress -a {article_uuid} -n {image_name}
 - `png`
   先做无损压缩
 - 如果还不够，再依次缩到 `95%`、`90%`、`85%`
+- `gif`
+  保留动画帧和播放时序，优先逐步缩尺寸，其次逐步减少色盘
 - 目标体积尽量控制在 `9.5MB` 左右，给上传留余量
 
 
