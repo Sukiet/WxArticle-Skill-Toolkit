@@ -31,7 +31,7 @@
 - `WX_ARTICLE_HOST`
   后端服务地址。
 - `ACCESS_TOKEN`
-  全局统一明文保存的 Bearer token。所有会访问服务端 API 的命令都会自动带上：
+  全局统一保存的 Bearer token。所有会访问服务端 API 的命令都会自动带上：
   `Authorization: Bearer <token>`。
 
 如果使用 `debug/` 下编译好的二进制，它会按下面顺序查找 `.env`：
@@ -320,6 +320,6 @@ skill-tool preview -a {article_uuid}
 9. 如果某张图片过大，执行：
    `skill-tool compress -a {article_uuid} -n {image_name}`
 10. 用户确认可以上传后，执行：
-   `skill-tool upload -a {article_uuid}`
+      `skill-tool upload -a {article_uuid}`
 11. 用户确认要预览后，执行：
-   `skill-tool preview -a {article_uuid}`
+      `skill-tool preview -a {article_uuid}`
