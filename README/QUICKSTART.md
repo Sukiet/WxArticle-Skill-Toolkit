@@ -30,6 +30,9 @@
   本地文章工程的根目录。
 - `WX_ARTICLE_HOST`
   后端服务地址。
+- `ACCESS_TOKEN`
+  全局统一明文保存的 Bearer token。所有会访问服务端 API 的命令都会自动带上：
+  `Authorization: Bearer <token>`。
 
 如果使用 `debug/` 下编译好的二进制，它会按下面顺序查找 `.env`：
 
@@ -110,6 +113,7 @@ skill-tool fetch-template --help
 - `--help` 和 `help <command>` 不依赖环境变量
 - 顶层帮助会列出全部命令
 - 子命令帮助会显示单命令用法和示例
+- 只有会访问后端 API 的命令才需要 `ACCESS_TOKEN`
 
 
 ### 3. 新建文章工程
@@ -163,6 +167,7 @@ skill-tool templates-list
 
 - 不要默认替用户选模板
 - 先拿模板列表，再和用户确认是否需要、需要哪一个
+- 这个命令会自动携带 `Authorization: Bearer <token>`
 
 
 ### 6. 拉取模板
@@ -187,6 +192,7 @@ skill-tool fetch-template -a {article_uuid} -t {template_uuid}
 - 这个命令只会写入 `metadata.example.json` 和 `example.html`
 - 不会修改 `metadata.json`
 - 不会修改 `article.html`
+- 这个命令会自动携带 `Authorization: Bearer <token>`
 
 
 ### 7. 压缩单张图片
@@ -242,6 +248,7 @@ skill-tool upload -a {article_uuid}
 - `metadata.json.title` 不能为空
 - `images/` 中只要有任意一张图片超过 `10MB`，上传会在真正发请求前直接中止
 - 如果被体积拦住，先对对应图片执行 `compress`
+- 上传相关请求会自动携带 `Authorization: Bearer <token>`
 
 会上传：
 
@@ -269,6 +276,7 @@ skill-tool preview -a {article_uuid}
 
 - 会在 `.cache` 目录下生成二维码图片
 - 如果条件允许，直接在对话中把二维码展示给用户看
+- 这个命令会自动携带 `Authorization: Bearer <token>` 去请求预览接口
 
 
 ## 返回字段约定

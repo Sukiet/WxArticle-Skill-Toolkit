@@ -18,8 +18,9 @@ import (
 )
 
 const (
-	envRepoDir = "WX_ARTICLE_REPO_DIR"
-	envHost    = "WX_ARTICLE_HOST"
+	envRepoDir     = "WX_ARTICLE_REPO_DIR"
+	envHost        = "WX_ARTICLE_HOST"
+	envAccessToken = "ACCESS_TOKEN"
 )
 
 type App struct {
@@ -106,6 +107,14 @@ func (a *App) host() (string, error) {
 		return "", fmt.Errorf("missing environment variable %s", envHost)
 	}
 	return strings.TrimRight(host, "/"), nil
+}
+
+func (a *App) token() (string, error) {
+	token := strings.TrimSpace(os.Getenv(envAccessToken))
+	if token == "" {
+		return "", fmt.Errorf("missing environment variable %s", envAccessToken)
+	}
+	return token, nil
 }
 
 func makeArticlePaths(repoDir, articleUUID string) articlePaths {
@@ -205,6 +214,12 @@ func isFileEmpty(path string) (bool, error) {
 }
 
 func (a *App) doRequest(request *http.Request) (*http.Response, error) {
+	token, err := a.token()
+	if err != nil {
+		return nil, err
+	}
+	request.Header.Set("Authorization", "Bearer "+token)
+
 	response, err := a.client.Do(request)
 	if err != nil {
 		return nil, err

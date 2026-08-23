@@ -147,7 +147,8 @@ func (a *App) printRootHelp(specs map[string]CommandSpec) {
 	a.writeHelpLine("  skill-tool <command> [args]\n\n")
 	a.writeHelpLine("环境变量：\n")
 	a.writeHelpLine("  %s   本地文章工程根目录\n", envRepoDir)
-	a.writeHelpLine("  %s      后端服务地址\n\n", envHost)
+	a.writeHelpLine("  %s      后端服务地址\n", envHost)
+	a.writeHelpLine("  %s             全局统一明文保存的 Bearer token\n\n", envAccessToken)
 	a.writeHelpLine("命令：\n")
 	for _, name := range names {
 		spec := specs[name]
