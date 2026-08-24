@@ -35,8 +35,8 @@ type TemplateSummaryOutput struct {
 	ModifiedAtReadable string  `json:"modified_at_readable,omitempty"`
 }
 
-type ImageExistsResponse struct {
-	Exists bool `json:"exists"`
+type ImageSyncResponse struct {
+	SyncState string `json:"sync_state"`
 }
 
 type articlePaths struct {

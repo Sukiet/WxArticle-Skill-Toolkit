@@ -353,25 +353,27 @@ func (a *App) commandUpload(args []string) error {
 			return fmt.Errorf("md5 image %s: %w", entry.Name(), err)
 		}
 
-		var existsResponse ImageExistsResponse
-		if err := a.postJSON(host+"/upload/image_exists", map[string]string{
-			"md5": md5Value,
-		}, &existsResponse); err != nil {
-			return fmt.Errorf("check image exists %s: %w", entry.Name(), err)
+		var syncResponse ImageSyncResponse
+		if err := a.postJSON(host+"/sync/"+*articleUUID+"/image", map[string]string{
+			"name": entry.Name(),
+			"md5":  md5Value,
+		}, &syncResponse); err != nil {
+			return fmt.Errorf("sync image reference %s: %w", entry.Name(), err)
 		}
 
-		if existsResponse.Exists {
+		switch syncResponse.SyncState {
+		case "identical", "synchronized":
 			skippedImages++
-			continue
-		}
-		uploadedImages++
-
-		if err := a.postMultipart(host+"/upload/image", map[string]string{
-			"md5":          md5Value,
-			"article_uuid": *articleUUID,
-			"img_name":     entry.Name(),
-		}, "file", imagePath, nil); err != nil {
-			return fmt.Errorf("upload image %s: %w", entry.Name(), err)
+		case "need_upload":
+			uploadedImages++
+			if err := a.postMultipart(host+"/upload/"+*articleUUID+"/image", map[string]string{
+				"md5":  md5Value,
+				"name": entry.Name(),
+			}, "file", imagePath, nil); err != nil {
+				return fmt.Errorf("upload image %s: %w", entry.Name(), err)
+			}
+		default:
+			return fmt.Errorf("sync image reference %s: unexpected sync_state %q", entry.Name(), syncResponse.SyncState)
 		}
 	}
 
