@@ -93,7 +93,7 @@ func (a *App) commandSpecs() map[string]CommandSpec {
 			NeedsEnv:    true,
 			Run:         a.commandCompress,
 			ArgsHint:    "-a, --article  -n, --name",
-			Description: "仅在图片超过 10MB 时执行压缩，并尽量保留画质。",
+			Description: "当图片超过当前格式体积上限（GIF 5MB，其它 10MB）或宽度超过 1080px 时执行压缩，并尽量保留画质。",
 		}),
 		"upload": mustCommandSpec(CommandSpec{
 			Name:        "upload",
@@ -103,7 +103,7 @@ func (a *App) commandSpecs() map[string]CommandSpec {
 			NeedsEnv:    true,
 			Run:         a.commandUpload,
 			ArgsHint:    "-a, --article",
-			Description: "上传正式文章内容、元数据和图片；如果有图片超过 10MB 会先中止。",
+			Description: "上传正式文章内容、元数据和图片；如果 GIF 超过 5MB，或其它图片超过 10MB，会先中止。",
 		}),
 		"preview": mustCommandSpec(CommandSpec{
 			Name:        "preview",

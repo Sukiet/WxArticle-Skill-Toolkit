@@ -20,7 +20,10 @@ import (
 )
 
 const maxUploadImageSize = 10 * 1024 * 1024
+const maxUploadGIFSize = 5 * 1024 * 1024
 const targetCompressedImageSize = int64(float64(maxUploadImageSize) * 0.95)
+const targetCompressedGIFSize = int64(float64(maxUploadGIFSize) * 0.95)
+const maxCompressedImageWidth = 1080
 
 func fileSize(path string) (int64, error) {
 	info, err := os.Stat(path)
@@ -31,21 +34,13 @@ func fileSize(path string) (int64, error) {
 }
 
 func isSupportedCompressImage(path string) bool {
-	switch strings.ToLower(filepath.Ext(path)) {
-	case ".jpg", ".jpeg", ".png", ".gif":
-		return true
-	default:
-		return false
-	}
+	return normalizedImageFormat(path) != ""
 }
 
-func compressImageToLimit(path string, maxBytes int64) (int64, int64, error) {
+func compressImageToLimit(path string, maxBytes int64, maxWidth int) (int64, int64, error) {
 	originalSize, err := fileSize(path)
 	if err != nil {
 		return 0, 0, err
-	}
-	if originalSize <= maxBytes {
-		return originalSize, originalSize, nil
 	}
 	if !isSupportedCompressImage(path) {
 		return 0, 0, fmt.Errorf("unsupported image format for compress: %s", filepath.Ext(path))
@@ -56,22 +51,19 @@ func compressImageToLimit(path string, maxBytes int64) (int64, int64, error) {
 		return 0, 0, err
 	}
 
-	_, format, err := image.DecodeConfig(bytes.NewReader(data))
+	config, format, err := image.DecodeConfig(bytes.NewReader(data))
 	if err != nil {
 		return 0, 0, err
 	}
-
-	format = strings.ToLower(format)
-	if format == "jpg" {
-		format = "jpeg"
+	format = normalizedDecodedFormat(format)
+	maxBytes = effectiveMaxBytesForFormat(format, maxBytes)
+	if !shouldCompressImage(originalSize, config.Width, maxBytes, maxWidth) {
+		return originalSize, originalSize, nil
 	}
-	if format == "gif" {
-		targetBytes := maxBytes
-		if targetCompressedImageSize < maxBytes {
-			targetBytes = targetCompressedImageSize
-		}
 
-		encoded, err := compressGIF(data, targetBytes)
+	if format == "gif" {
+		targetBytes := compressionTargetBytes(originalSize, maxBytes)
+		encoded, err := compressGIF(data, targetBytes, maxWidth)
 		if err != nil {
 			return 0, 0, err
 		}
@@ -89,12 +81,8 @@ func compressImageToLimit(path string, maxBytes int64) (int64, int64, error) {
 		return 0, 0, fmt.Errorf("unsupported decoded image format for compress: %s", format)
 	}
 
-	targetBytes := maxBytes
-	if targetCompressedImageSize < maxBytes {
-		targetBytes = targetCompressedImageSize
-	}
-
-	encoded, err := compressImageBytes(sourceImage, format, targetBytes)
+	targetBytes := compressionTargetBytes(originalSize, maxBytes)
+	encoded, err := compressImageBytes(sourceImage, format, targetBytes, maxWidth)
 	if err != nil {
 		return 0, 0, err
 	}
@@ -104,20 +92,82 @@ func compressImageToLimit(path string, maxBytes int64) (int64, int64, error) {
 	return originalSize, int64(len(encoded)), nil
 }
 
-func compressImageBytes(sourceImage image.Image, format string, targetBytes int64) ([]byte, error) {
+func shouldCompressImage(sizeBytes int64, width int, maxBytes int64, maxWidth int) bool {
+	return sizeBytes > maxBytes || width > maxWidth
+}
+
+func compressionTargetBytes(originalSize int64, maxBytes int64) int64 {
+	if originalSize <= maxBytes {
+		return originalSize
+	}
+
+	targetBytes := targetCompressedImageSize
+	if maxBytes <= maxUploadGIFSize {
+		targetBytes = targetCompressedGIFSize
+	}
+	if targetBytes < maxBytes {
+		return targetBytes
+	}
+	return maxBytes
+}
+
+func normalizedImageFormat(path string) string {
+	switch strings.ToLower(filepath.Ext(path)) {
+	case ".jpg", ".jpeg":
+		return "jpeg"
+	case ".png":
+		return "png"
+	case ".gif":
+		return "gif"
+	default:
+		return ""
+	}
+}
+
+func normalizedDecodedFormat(format string) string {
+	format = strings.ToLower(strings.TrimSpace(format))
+	if format == "jpg" {
+		return "jpeg"
+	}
+	return format
+}
+
+func effectiveMaxBytesForFormat(format string, defaultMaxBytes int64) int64 {
+	if format == "gif" {
+		return maxUploadGIFSize
+	}
+	return defaultMaxBytes
+}
+
+func imageSizeLimitForPath(path string) int64 {
+	return effectiveMaxBytesForFormat(normalizedImageFormat(path), maxUploadImageSize)
+}
+
+func formatSizeLimitLabel(format string) string {
+	if format == "gif" {
+		return "5MB"
+	}
+	return "10MB"
+}
+
+func formatSizeLimitLabelForPath(path string) string {
+	return formatSizeLimitLabel(normalizedImageFormat(path))
+}
+
+func compressImageBytes(sourceImage image.Image, format string, targetBytes int64, maxWidth int) ([]byte, error) {
 	switch format {
 	case "jpeg":
-		return compressJPEG(sourceImage, targetBytes)
+		return compressJPEG(sourceImage, targetBytes, maxWidth)
 	case "png":
-		return compressPNG(sourceImage, targetBytes)
+		return compressPNG(sourceImage, targetBytes, maxWidth)
 	default:
 		return nil, errors.New("unsupported image format")
 	}
 }
 
-func compressJPEG(sourceImage image.Image, targetBytes int64) ([]byte, error) {
+func compressJPEG(sourceImage image.Image, targetBytes int64, maxWidth int) ([]byte, error) {
 	qualities := []int{92, 88, 84, 80}
-	scaleFactors := []float64{1.0, 0.95, 0.90, 0.85}
+	scaleFactors := boundedScaleFactors(sourceImage.Bounds().Dx(), maxWidth, []float64{1.0, 0.95, 0.90, 0.85})
 
 	var lastEncoded []byte
 	for _, factor := range scaleFactors {
@@ -145,8 +195,8 @@ func compressJPEG(sourceImage image.Image, targetBytes int64) ([]byte, error) {
 	return nil, errors.New("failed to encode jpeg image")
 }
 
-func compressPNG(sourceImage image.Image, targetBytes int64) ([]byte, error) {
-	scaleFactors := []float64{1.0, 0.95, 0.90, 0.85}
+func compressPNG(sourceImage image.Image, targetBytes int64, maxWidth int) ([]byte, error) {
+	scaleFactors := boundedScaleFactors(sourceImage.Bounds().Dx(), maxWidth, []float64{1.0, 0.95, 0.90, 0.85})
 
 	var lastEncoded []byte
 	for _, factor := range scaleFactors {
@@ -172,7 +222,7 @@ func compressPNG(sourceImage image.Image, targetBytes int64) ([]byte, error) {
 	return nil, errors.New("failed to encode png image")
 }
 
-func compressGIF(data []byte, targetBytes int64) ([]byte, error) {
+func compressGIF(data []byte, targetBytes int64, maxWidth int) ([]byte, error) {
 	sourceGIF, err := gif.DecodeAll(bytes.NewReader(data))
 	if err != nil {
 		return nil, err
@@ -184,7 +234,7 @@ func compressGIF(data []byte, targetBytes int64) ([]byte, error) {
 	originalSize := int64(len(data))
 	canvasWidth, canvasHeight := gifCanvasSize(sourceGIF)
 	renderedFrames := renderGIFFullFrames(sourceGIF)
-	scaleFactors := gifScaleFactors(originalSize, targetBytes)
+	scaleFactors := gifScaleFactors(originalSize, targetBytes, canvasWidth, maxWidth)
 	colorCounts := gifColorCounts(originalSize, targetBytes)
 
 	var lastEncoded []byte
@@ -222,32 +272,32 @@ func gifCanvasSize(sourceGIF *gif.GIF) (int, int) {
 	return sourceGIF.Image[0].Bounds().Dx(), sourceGIF.Image[0].Bounds().Dy()
 }
 
-func gifScaleFactors(originalSize, targetBytes int64) []float64 {
+func gifScaleFactors(originalSize, targetBytes int64, originalWidth, maxWidth int) []float64 {
+	maxAllowedScale := maxWidthScale(originalWidth, maxWidth)
 	if originalSize <= targetBytes || targetBytes <= 0 {
-		return []float64{1.0}
+		return uniqueScaleFactors(clampScaleCandidates(maxAllowedScale, []float64{
+			maxAllowedScale,
+			maxAllowedScale * 0.95,
+			maxAllowedScale * 0.90,
+		}))
 	}
 
 	ratio := float64(targetBytes) / float64(originalSize)
 	estimated := math.Sqrt(ratio)
-	if estimated > 1.0 {
-		estimated = 1.0
-	}
-	if estimated < 0.25 {
-		estimated = 0.25
-	}
-
 	candidates := []float64{
 		estimated * 1.10,
 		estimated,
 		estimated * 0.92,
 		estimated * 0.84,
+		estimated * 0.76,
+		estimated * 0.68,
 	}
 
 	if ratio > 0.85 {
 		candidates = append([]float64{1.0, 0.97}, candidates...)
 	}
 
-	return uniqueScaleFactors(candidates)
+	return uniqueScaleFactors(clampScaleCandidates(maxAllowedScale, candidates))
 }
 
 func uniqueScaleFactors(values []float64) []float64 {
@@ -258,8 +308,8 @@ func uniqueScaleFactors(values []float64) []float64 {
 		if value > 1.0 {
 			value = 1.0
 		}
-		if value < 0.25 {
-			value = 0.25
+		if value < 0.20 {
+			value = 0.20
 		}
 
 		rounded := int(math.Round(value * 100))
@@ -271,6 +321,32 @@ func uniqueScaleFactors(values []float64) []float64 {
 	}
 
 	return result
+}
+
+func maxWidthScale(width, maxWidth int) float64 {
+	if maxWidth <= 0 || width <= 0 || width <= maxWidth {
+		return 1.0
+	}
+	return float64(maxWidth) / float64(width)
+}
+
+func clampScaleCandidates(maxAllowed float64, candidates []float64) []float64 {
+	result := make([]float64, 0, len(candidates)+1)
+	if maxAllowed <= 0 {
+		maxAllowed = 1.0
+	}
+	result = append(result, maxAllowed)
+	for _, candidate := range candidates {
+		if candidate > maxAllowed {
+			candidate = maxAllowed
+		}
+		result = append(result, candidate)
+	}
+	return result
+}
+
+func boundedScaleFactors(width, maxWidth int, base []float64) []float64 {
+	return uniqueScaleFactors(clampScaleCandidates(maxWidthScale(width, maxWidth), base))
 }
 
 func gifColorCounts(originalSize, targetBytes int64) []int {
@@ -285,9 +361,9 @@ func gifColorCounts(originalSize, targetBytes int64) []int {
 	case ratio >= 0.60:
 		return []int{224, 192, 160, 128}
 	case ratio >= 0.45:
-		return []int{192, 160, 128, 96}
+		return []int{192, 160, 128, 96, 80}
 	default:
-		return []int{160, 128, 96, 64}
+		return []int{160, 128, 96, 80, 64, 48}
 	}
 }
 

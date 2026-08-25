@@ -344,8 +344,10 @@ func (a *App) commandUpload(args []string) error {
 		if err != nil {
 			return fmt.Errorf("stat image %s: %w", entry.Name(), err)
 		}
-		if sizeBytes > maxUploadImageSize {
-			return fmt.Errorf("image %s is larger than 10MB; use compress -a %s -n %s before upload", entry.Name(), *articleUUID, entry.Name())
+		limitBytes := imageSizeLimitForPath(imagePath)
+		limitLabel := formatSizeLimitLabelForPath(imagePath)
+		if sizeBytes > limitBytes {
+			return fmt.Errorf("image %s is larger than %s; use compress -a %s -n %s before upload", entry.Name(), limitLabel, *articleUUID, entry.Name())
 		}
 
 		md5Value, err := fileMD5(imagePath)
@@ -448,15 +450,17 @@ func (a *App) commandCompress(args []string) error {
 		return fmt.Errorf("image not found: %w", err)
 	}
 
-	beforeSize, afterSize, err := compressImageToLimit(imagePath, maxUploadImageSize)
+	limitBytes := imageSizeLimitForPath(imagePath)
+	limitLabel := formatSizeLimitLabelForPath(imagePath)
+	beforeSize, afterSize, err := compressImageToLimit(imagePath, maxUploadImageSize, maxCompressedImageWidth)
 	if err != nil {
 		return fmt.Errorf("compress image %s: %w", cleanName, err)
 	}
 
 	nextCommands := []string{"upload"}
-	message := "这张图片当前没有超过 10MB，因此这次没有执行压缩。"
+	message := fmt.Sprintf("这张图片当前既没有超过 %s，宽度也没有超过 1080px，因此这次没有执行压缩。", limitLabel)
 	if afterSize < beforeSize {
-		message = "图片已压缩完成，并已覆盖原文件；本次压缩优先保留画质，只有在必要时才缩小尺寸。"
+		message = fmt.Sprintf("图片已压缩完成，并已覆盖原文件；本次压缩会把宽度控制在 1080px 内，并尽量把体积压到当前格式上限以内（%s），同时尽量保留画质。", limitLabel)
 	}
 
 	return a.writeSuccess(map[string]any{
@@ -465,7 +469,8 @@ func (a *App) commandCompress(args []string) error {
 		"image_path":    imagePath,
 		"size_before":   beforeSize,
 		"size_after":    afterSize,
-		"limit_bytes":   maxUploadImageSize,
+		"limit_bytes":   limitBytes,
+		"limit_label":   limitLabel,
 		"message":       message,
 		"next_commands": nextCommands,
 	})
