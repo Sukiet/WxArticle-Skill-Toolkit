@@ -167,46 +167,11 @@ func compressImageBytes(sourceImage image.Image, format string, targetBytes int6
 
 func compressJPEG(sourceImage image.Image, targetBytes int64, maxWidth int) ([]byte, error) {
 	qualities := []int{92, 88, 84, 80}
-	scaleFactors := boundedScaleFactors(sourceImage.Bounds().Dx(), maxWidth, []float64{1.0, 0.95, 0.90, 0.85})
+	current := resizeStaticImageToMaxWidth(sourceImage, maxWidth)
 
 	var lastEncoded []byte
-	for _, factor := range scaleFactors {
-		current := sourceImage
-		if factor < 1.0 {
-			width, height := scaledDimensions(sourceImage.Bounds().Dx(), sourceImage.Bounds().Dy(), factor)
-			current = resizeImage(sourceImage, width, height)
-		}
-
-		for _, quality := range qualities {
-			encoded, err := encodeJPEG(current, quality)
-			if err != nil {
-				return nil, err
-			}
-			lastEncoded = encoded
-			if int64(len(encoded)) <= targetBytes {
-				return encoded, nil
-			}
-		}
-	}
-
-	if len(lastEncoded) > 0 {
-		return nil, fmt.Errorf("image is still larger than %d bytes after compression", targetBytes)
-	}
-	return nil, errors.New("failed to encode jpeg image")
-}
-
-func compressPNG(sourceImage image.Image, targetBytes int64, maxWidth int) ([]byte, error) {
-	scaleFactors := boundedScaleFactors(sourceImage.Bounds().Dx(), maxWidth, []float64{1.0, 0.95, 0.90, 0.85})
-
-	var lastEncoded []byte
-	for _, factor := range scaleFactors {
-		current := sourceImage
-		if factor < 1.0 {
-			width, height := scaledDimensions(sourceImage.Bounds().Dx(), sourceImage.Bounds().Dy(), factor)
-			current = resizeImage(sourceImage, width, height)
-		}
-
-		encoded, err := encodePNG(current)
+	for _, quality := range qualities {
+		encoded, err := encodeJPEG(current, quality)
 		if err != nil {
 			return nil, err
 		}
@@ -219,7 +184,20 @@ func compressPNG(sourceImage image.Image, targetBytes int64, maxWidth int) ([]by
 	if len(lastEncoded) > 0 {
 		return nil, fmt.Errorf("image is still larger than %d bytes after compression", targetBytes)
 	}
-	return nil, errors.New("failed to encode png image")
+	return nil, errors.New("failed to encode jpeg image")
+}
+
+func compressPNG(sourceImage image.Image, targetBytes int64, maxWidth int) ([]byte, error) {
+	current := resizeStaticImageToMaxWidth(sourceImage, maxWidth)
+	encoded, err := encodePNG(current)
+	if err != nil {
+		return nil, err
+	}
+	if int64(len(encoded)) <= targetBytes {
+		return encoded, nil
+	}
+
+	return nil, fmt.Errorf("image is still larger than %d bytes after compression", targetBytes)
 }
 
 func compressGIF(data []byte, targetBytes int64, maxWidth int) ([]byte, error) {
@@ -509,6 +487,22 @@ func resizeImage(src image.Image, width, height int) image.Image {
 	dst := image.NewRGBA(image.Rect(0, 0, width, height))
 	xdraw.CatmullRom.Scale(dst, dst.Bounds(), src, src.Bounds(), xdraw.Over, nil)
 	return dst
+}
+
+func resizeStaticImageToMaxWidth(src image.Image, maxWidth int) image.Image {
+	if maxWidth <= 0 {
+		return src
+	}
+
+	width := src.Bounds().Dx()
+	height := src.Bounds().Dy()
+	if width <= 0 || height <= 0 || width <= maxWidth {
+		return src
+	}
+
+	scale := float64(maxWidth) / float64(width)
+	targetWidth, targetHeight := scaledDimensions(width, height, scale)
+	return resizeImage(src, targetWidth, targetHeight)
 }
 
 func scaledDimensions(width, height int, factor float64) (int, int) {

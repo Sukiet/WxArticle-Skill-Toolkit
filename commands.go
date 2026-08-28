@@ -460,7 +460,7 @@ func (a *App) commandCompress(args []string) error {
 	nextCommands := []string{"upload"}
 	message := fmt.Sprintf("这张图片当前既没有超过 %s，宽度也没有超过 1080px，因此这次没有执行压缩。", limitLabel)
 	if afterSize < beforeSize {
-		message = fmt.Sprintf("图片已压缩完成，并已覆盖原文件；本次压缩会把宽度控制在 1080px 内，并尽量把体积压到当前格式上限以内（%s），同时尽量保留画质。", limitLabel)
+		message = fmt.Sprintf("图片已压缩完成，并已覆盖原文件；对于 jpg/jpeg/png，如果原图宽度超过 1080px，会输出为 1080px 宽，否则保持原宽度，再尽量把体积压到当前格式上限以内（%s），同时尽量保留画质。", limitLabel)
 	}
 
 	return a.writeSuccess(map[string]any{
