@@ -154,6 +154,20 @@ func formatSizeLimitLabelForPath(path string) string {
 	return formatSizeLimitLabel(normalizedImageFormat(path))
 }
 
+func imageConfigForPath(path string) (image.Config, string, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return image.Config{}, "", err
+	}
+	defer file.Close()
+
+	config, format, err := image.DecodeConfig(file)
+	if err != nil {
+		return image.Config{}, "", err
+	}
+	return config, normalizedDecodedFormat(format), nil
+}
+
 func compressImageBytes(sourceImage image.Image, format string, targetBytes int64, maxWidth int) ([]byte, error) {
 	switch format {
 	case "jpeg":

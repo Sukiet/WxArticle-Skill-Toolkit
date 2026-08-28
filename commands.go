@@ -14,6 +14,12 @@ import (
 	"github.com/skip2/go-qrcode"
 )
 
+type uploadBlockedImage struct {
+	Name            string
+	Reasons         []string
+	CompressCommand string `json:"compress_command"`
+}
+
 func (a *App) Run(_ context.Context, args []string) int {
 	if err := a.run(args); err != nil {
 		a.writeError(err)
@@ -331,6 +337,37 @@ func (a *App) commandUpload(args []string) error {
 		return imageEntries[i].Name() < imageEntries[j].Name()
 	})
 
+	blockingImages, err := collectUploadBlockingImages(paths, *articleUUID, imageEntries)
+	if err != nil {
+		return err
+	}
+	if len(blockingImages) > 0 {
+		oversizedImages := make([]string, 0, len(blockingImages))
+		overwideImages := make([]string, 0, len(blockingImages))
+		suggestedCommands := make([]string, 0, len(blockingImages))
+
+		for _, blocked := range blockingImages {
+			if containsString(blocked.Reasons, "size_exceeded") {
+				oversizedImages = append(oversizedImages, blocked.Name)
+			}
+			if containsString(blocked.Reasons, "width_exceeded") {
+				overwideImages = append(overwideImages, blocked.Name)
+			}
+			suggestedCommands = append(suggestedCommands, blocked.CompressCommand)
+		}
+
+		return newStructuredError(
+			errors.New("upload blocked by local image validation"),
+			"上传已在本地校验阶段中止。请先执行建议的 compress 命令处理这些图片，再重试 upload。",
+			map[string]any{
+				"article_uuid":       *articleUUID,
+				"oversized_images":   oversizedImages,
+				"overwide_images":    overwideImages,
+				"suggested_commands": suggestedCommands,
+			},
+		)
+	}
+
 	uploadedImages := 0
 	skippedImages := 0
 
@@ -409,6 +446,56 @@ func (a *App) commandUpload(args []string) error {
 		"message":              "正式文章内容、元数据和图片已上传完成。",
 		"next_commands":        []string{"preview"},
 	})
+}
+
+func collectUploadBlockingImages(paths articlePaths, articleUUID string, imageEntries []os.DirEntry) ([]uploadBlockedImage, error) {
+	blockingImages := make([]uploadBlockedImage, 0)
+
+	for _, entry := range imageEntries {
+		if entry.IsDir() {
+			continue
+		}
+
+		imagePath := filepath.Join(paths.ImagesDir, entry.Name())
+		sizeBytes, err := fileSize(imagePath)
+		if err != nil {
+			return nil, fmt.Errorf("stat image %s: %w", entry.Name(), err)
+		}
+
+		config, _, err := imageConfigForPath(imagePath)
+		if err != nil {
+			return nil, fmt.Errorf("read image config %s: %w", entry.Name(), err)
+		}
+
+		limitBytes := imageSizeLimitForPath(imagePath)
+		reasons := make([]string, 0, 2)
+		if sizeBytes > limitBytes {
+			reasons = append(reasons, "size_exceeded")
+		}
+		if config.Width > maxCompressedImageWidth {
+			reasons = append(reasons, "width_exceeded")
+		}
+		if len(reasons) == 0 {
+			continue
+		}
+
+		blockingImages = append(blockingImages, uploadBlockedImage{
+			Name:            entry.Name(),
+			Reasons:         reasons,
+			CompressCommand: fmt.Sprintf("skill-tool compress -a %s -n %s", articleUUID, entry.Name()),
+		})
+	}
+
+	return blockingImages, nil
+}
+
+func containsString(values []string, target string) bool {
+	for _, value := range values {
+		if value == target {
+			return true
+		}
+	}
+	return false
 }
 
 func (a *App) commandCompress(args []string) error {

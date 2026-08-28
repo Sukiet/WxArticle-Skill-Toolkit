@@ -29,6 +29,12 @@ type App struct {
 	client *http.Client
 }
 
+type structuredError struct {
+	err     error
+	message string
+	payload map[string]any
+}
+
 func newApp(stdout, stderr io.Writer) *App {
 	return &App{
 		stdout: stdout,
@@ -65,11 +71,26 @@ func (a *App) writeJSON(out io.Writer, value any) error {
 }
 
 func (a *App) writeError(err error) {
-	_ = a.writeJSON(a.stderr, map[string]any{
+	response := map[string]any{
 		"ok":      false,
 		"error":   err.Error(),
 		"message": "命令执行失败。请先和用户确认是否需要继续处理这个问题，再决定是否重新执行相关命令。",
-	})
+	}
+
+	var detailed *structuredError
+	if errors.As(err, &detailed) {
+		if strings.TrimSpace(detailed.message) != "" {
+			response["message"] = detailed.message
+		}
+		for key, value := range detailed.payload {
+			if key == "ok" || key == "error" || key == "message" {
+				continue
+			}
+			response[key] = value
+		}
+	}
+
+	_ = a.writeJSON(a.stderr, response)
 }
 
 func (a *App) writeSuccess(value map[string]any) error {
@@ -77,6 +98,22 @@ func (a *App) writeSuccess(value map[string]any) error {
 		value["ok"] = true
 	}
 	return a.writeJSON(a.stdout, value)
+}
+
+func newStructuredError(err error, message string, payload map[string]any) error {
+	return &structuredError{
+		err:     err,
+		message: message,
+		payload: payload,
+	}
+}
+
+func (e *structuredError) Error() string {
+	return e.err.Error()
+}
+
+func (e *structuredError) Unwrap() error {
+	return e.err
 }
 
 func (a *App) repoDir() (string, error) {

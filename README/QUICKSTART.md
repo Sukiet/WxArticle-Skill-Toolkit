@@ -256,7 +256,8 @@ skill-tool upload -a {article_uuid}
 - `metadata.json.title` 不能为空
 - `images/` 中只要有任意一张 `gif` 超过 `5MB`，上传会在真正发请求前直接中止
 - `images/` 中只要有任意一张非 `gif` 图片超过 `10MB`，上传也会在真正发请求前直接中止
-- 如果被体积拦住，先对对应图片执行 `compress`
+- `images/` 中只要有任意一张图片宽度超过 `1080px`，上传也会在真正发请求前直接中止
+- 如果被图片体积或宽度拦住，CLI 会只列出对应图片文件名，并返回可直接执行的 `compress` 建议命令
 - 每张图片都会先调用 `/sync/{article_uuid}/image`
 - 只有当返回 `need_upload` 时，才会继续调用图片上传接口
 - 上传相关请求会自动携带 `Authorization: Bearer <token>`
